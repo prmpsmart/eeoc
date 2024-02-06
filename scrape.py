@@ -1,4 +1,5 @@
-import re, bs4, requests, pandas
+import os
+import re, bs4, requests, pymongo
 
 
 m_pattern = r"\$\d{1,3}(?:,\d{3})*(?:\.\d{2})?"
@@ -28,6 +29,8 @@ links = []
 dates = []
 
 host = "https://www.eeoc.gov"
+
+db = pymongo.MongoClient(os.environ.get("mongodb"))["eeoc"]["cases"]
 
 article = 0
 page = 0
@@ -78,12 +81,14 @@ try:
                         case_number = case_number_match.group()
                         # date = date_pattern.search(content).group()
 
-                        case_numbers.append(f"Case No. {case_number}")
-                        companies.append(company)
-                        amounts.append(amount)
-                        complaints.append(complaint)
-                        links.append(link)
-                        dates.append(date)
+                        db.insert_one(
+                            case_numbers=f"Case No. {case_number}",
+                            company=company,
+                            amounts=amount,
+                            complaints=complaint,
+                            links=link,
+                            dates=date,
+                        )
 
                         article += 1
 
@@ -98,17 +103,3 @@ except KeyboardInterrupt as e:
     ...
 except KeyboardInterrupt as e:
     ...
-
-data = {
-    "Case Number": case_numbers,
-    "Name of Company": companies,
-    "Complaint(s)": complaints,
-    "Settlement Amount": amounts,
-    "Date": dates,
-    "Link": links,
-}
-
-df = pandas.DataFrame(data, columns=data.keys())
-
-df.to_csv("eeoc_cases.csv", index=False)
-df.to_excel("eeoc_cases.xlsx", index=False)
