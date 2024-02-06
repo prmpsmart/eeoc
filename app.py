@@ -1,4 +1,4 @@
-from bottle import Bottle, route, run
+from bottle import Bottle
 import threading
 
 app = Bottle()
@@ -10,5 +10,5 @@ def t():
 
 @app.route("/")
 def index():
-    threading.Thread(target=t)
+    threading.Thread(target=t).start()
     return "Hello, this is your Bottle app!"
