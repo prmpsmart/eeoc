@@ -100,6 +100,6 @@ try:
         page + 1
 
 except KeyboardInterrupt as e:
-    ...
+    print(e, 1)
 except KeyboardInterrupt as e:
-    ...
+    print(e, 2)
