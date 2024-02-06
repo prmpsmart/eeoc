@@ -1,12 +1,15 @@
-import os
-import re, bs4, requests, pymongo
+import re, bs4, requests, pandas, datetime
 
 
 m_pattern = r"\$\d{1,3}(?:,\d{3})*(?:\.\d{2})?"
 money_pattern = re.compile(m_pattern)
-payment_pattern = re.compile(rf"to Pay {m_pattern} to Settle")
+payment_pattern = re.compile(rf"{m_pattern}")
+# money_pattern = re.compile(r'\$\s*(?:\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?|\d+ million)')
+# money_pattern = re.compile(r'\$\s*(?:\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?|\d+\s*million|\d+)')
+money_pattern = re.compile(r'\$\s*(?:\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?|\d+\s*million|\d+(\.\d{1,3})?\s*Million)')
+
 case_number_pattern = re.compile(r"\b\d+:\d+-cv-\d+\b")
-# date_pattern = re.compile(rb"\b\d{2}-\d{2}-\d{4}\b")
+date_pattern = re.compile(r"\b\d{2}-\d{2}-\d{4}\b")
 
 
 space = " "
@@ -22,26 +25,21 @@ def remove_double_spaces(text: str):
 
 
 case_numbers = []
-companies = []
-complaints = []
+titles = []
 amounts = []
 links = []
 dates = []
 
 host = "https://www.eeoc.gov"
 
-db = pymongo.MongoClient(os.environ.get("mongodb"))["eeoc"]["cases"]
-
 article = 0
 page = 0
+
 try:
-    for index in range(290):
+    for index in range(page, 290):
         url = f"{host}/newsroom/search?page={index}"
 
-        content = requests.get(
-            url,
-            timeout=None,
-        ).content
+        content = requests.get(url).content
         soup = bs4.BeautifulSoup(content, features="html.parser")
 
         a_tags = soup.find_all("a", attrs=dict(rel="bookmark"))
@@ -50,56 +48,58 @@ try:
         for a_tag in a_tags:
             _link = a_tag["href"]
             title_span = a_tag.find("span")
+
             if title_span:
                 amount = ""
                 title = remove_double_spaces(title_span.text)
-                if match := payment_pattern.search(title):
-                    payment_text = match.group()
-                    amount = money_pattern.search(payment_text).group()
-                    company, complaint = title.split(payment_text)
-                    company, complaint = remove_double_spaces(
-                        company
-                    ), remove_double_spaces(complaint)
+                if amount := money_pattern.search(title):
+                    amount = amount.group()
 
-                    link = host + _link
-                    content = requests.get(
-                        link,
-                        timeout=None,
-                    ).content
+                    print(title)
 
-                    sub_soup = bs4.BeautifulSoup(content, features="html.parser")
-                    article_tag = sub_soup.find("article")
+                    if " Pay " in title and " to " in title:
+                        link = host + _link
+                        content = requests.get(link).content
 
-                    date_span = article_tag.find("span")
-                    date = date_span.text
+                        sub_soup = bs4.BeautifulSoup(content, features="html.parser")
+                        article_tag = sub_soup.find("article")
 
-                    p_span = article_tag.find("span")
+                        date = article_tag.find("div").text
+                        date = date_pattern.search(date).group()
 
-                    # open("content.html", "wb").write(content)
+                        for p in article_tag.find_all("p"):
+                            if case_number_match := case_number_pattern.search(p.text):
+                                case_number = case_number_match.group()
 
-                    if case_number_match := case_number_pattern.search(p_span.text):
-                        case_number = case_number_match.group()
-                        # date = date_pattern.search(content).group()
+                                titles.append(title)
+                                case_numbers.append(f"Case No. {case_number}")
+                                amounts.append(amount)
+                                links.append(link)
+                                dates.append(date)
 
-                        db.insert_one(
-                            case_numbers=f"Case No. {case_number}",
-                            company=company,
-                            amounts=amount,
-                            complaints=complaint,
-                            links=link,
-                            dates=date,
-                        )
+                                article += 1
 
-                        article += 1
+                                print(
+                                    f"Page : {page}   <>   Number articles found : {article}   <>    Latest : {title}"
+                                )
+                                break
 
-                        print(
-                            f"Page : {page}   <>   Number articles found : {article}   <>    Latest : {title}"
-                        )
-            break
-
-        page + 1
+        page += 1
 
 except KeyboardInterrupt as e:
-    print(e, 1)
-except KeyboardInterrupt as e:
-    print(e, 2)
+    ...
+
+data = {
+    "Case Number": case_numbers,
+    "Title": titles,
+    "Settlement Amount": amounts,
+    "Date": dates,
+    "Link": links,
+}
+
+df = pandas.DataFrame(data, columns=data.keys())
+
+
+name = "eeoc_cases-" + datetime.datetime.now().isoformat().split("T")[0]
+df.to_csv(f"{name}.csv", index=False)
+df.to_excel(f"{name}.xlsx", index=False)
