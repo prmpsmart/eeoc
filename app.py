@@ -5,6 +5,7 @@ app = Bottle()
 
 
 def t():
+    # trunk-ignore(ruff/F401)
     import scrape
 
 

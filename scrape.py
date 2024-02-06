@@ -1,12 +1,18 @@
-import re, bs4, requests, pandas, datetime
+import time
+import re
 
+import bs4
+import pandas
+import requests
 
 m_pattern = r"\$\d{1,3}(?:,\d{3})*(?:\.\d{2})?"
 money_pattern = re.compile(m_pattern)
 payment_pattern = re.compile(rf"{m_pattern}")
 # money_pattern = re.compile(r'\$\s*(?:\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?|\d+ million)')
 # money_pattern = re.compile(r'\$\s*(?:\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?|\d+\s*million|\d+)')
-money_pattern = re.compile(r'\$\s*(?:\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?|\d+\s*million|\d+(\.\d{1,3})?\s*Million)')
+money_pattern = re.compile(
+    r"\$\s*(?:\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?|\d+\s*million|\d+(\.\d{1,3})?\s*Million)"
+)
 
 case_number_pattern = re.compile(r"\b\d+:\d+-cv-\d+\b")
 date_pattern = re.compile(r"\b\d{2}-\d{2}-\d{4}\b")
@@ -33,13 +39,13 @@ dates = []
 host = "https://www.eeoc.gov"
 
 article = 0
-page = 0
+page = 148
 
 try:
     for index in range(page, 290):
         url = f"{host}/newsroom/search?page={index}"
 
-        content = requests.get(url).content
+        content = requests.get(url, timeout=10).content
         soup = bs4.BeautifulSoup(content, features="html.parser")
 
         a_tags = soup.find_all("a", attrs=dict(rel="bookmark"))
@@ -59,7 +65,7 @@ try:
 
                     if " Pay " in title and " to " in title:
                         link = host + _link
-                        content = requests.get(link).content
+                        content = requests.get(link, timeout=10).content
 
                         sub_soup = bs4.BeautifulSoup(content, features="html.parser")
                         article_tag = sub_soup.find("article")
@@ -86,7 +92,9 @@ try:
 
         page += 1
 
-except KeyboardInterrupt as e:
+except KeyboardInterrupt:
+    ...
+except Exception:
     ...
 
 data = {
@@ -100,6 +108,6 @@ data = {
 df = pandas.DataFrame(data, columns=data.keys())
 
 
-name = "eeoc_cases-" + datetime.datetime.now().isoformat().split("T")[0]
+name = f"eeoc_cases-{int(time.time)}"
 df.to_csv(f"{name}.csv", index=False)
 df.to_excel(f"{name}.xlsx", index=False)
