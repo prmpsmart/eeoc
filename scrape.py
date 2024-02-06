@@ -13,9 +13,29 @@ payment_pattern = re.compile(rf"{m_pattern}")
 money_pattern = re.compile(
     r"\$\s*(?:\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?|\d+\s*million|\d+(\.\d{1,3})?\s*Million)"
 )
+money_pattern = re.compile(
+    r"\$?(\d{1,3}(,\d{3})*|\d+)(\.\d+)? ?(million|billion)?", re.IGNORECASE
+)
 
-case_number_pattern = re.compile(r"\b\d+:\d+-cv-\d+\b")
+
+case_no_patterns = [
+    re.compile(r"\b\d{2}-cv-\d{5}-[A-Z0-9-]+\b"),
+    re.compile(r"Civil Action \d{2}-\d{4}"),
+    re.compile(r"\b\d+:\d+-cv-\d+\b"),
+    re.compile(r"\(Civil Action No\. (\d+:\d+-CV-\d+-[A-Z])\)"),
+    re.compile(r"Civil Action No\. (CV \d+-\d+)"),
+    re.compile(r"\(Case No\. [^)]+\)"),
+]
 date_pattern = re.compile(r"\b\d{2}-\d{2}-\d{4}\b")
+
+
+def find_case_number(text: str):
+    for pattern in case_no_patterns:
+        match = re.search(pattern, text)
+        if match:
+            return match.group()
+
+    return None
 
 
 space = " "
@@ -65,6 +85,7 @@ try:
 
                     if " Pay " in title and " to " in title:
                         link = host + _link
+                        print(link)
                         content = requests.get(link, timeout=10).content
 
                         sub_soup = bs4.BeautifulSoup(content, features="html.parser")
@@ -74,9 +95,8 @@ try:
                         date = date_pattern.search(date).group()
 
                         for p in article_tag.find_all("p"):
-                            if case_number_match := case_number_pattern.search(p.text):
-                                case_number = case_number_match.group()
-
+                            # print(p)
+                            if case_number := find_case_number(p.text):
                                 titles.append(title)
                                 case_numbers.append(f"Case No. {case_number}")
                                 amounts.append(amount)
@@ -86,7 +106,7 @@ try:
                                 article += 1
 
                                 print(
-                                    f"Page : {page}   <>   Number articles found : {article}   <>    Latest : {title}"
+                                    f"Page : {page}   <>   Number articles found : {article}   <>    Latest : {title}\n"
                                 )
                                 break
 
@@ -108,6 +128,6 @@ data = {
 df = pandas.DataFrame(data, columns=data.keys())
 
 
-name = f"eeoc_cases-{int(time.time)}"
+name = f"eeoc_cases-{int(time.time())}"
 df.to_csv(f"{name}.csv", index=False)
 df.to_excel(f"{name}.xlsx", index=False)
